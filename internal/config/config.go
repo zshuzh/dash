@@ -11,6 +11,7 @@ type Config struct {
 	Token    string
 	Username string
 	Org      string
+	Team     string
 }
 
 func Load() (*Config, error) {
@@ -31,9 +32,15 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("GITHUB_ORG is required - set it in .env or as an environment variable")
 	}
 
+	team := os.Getenv("GITHUB_TEAM")
+	if team == "" {
+		return nil, fmt.Errorf("GITHUB_TEAM is required - set it in .env or as an environment variable")
+	}
+
 	return &Config{
 		Token:    token,
 		Username: username,
 		Org:      org,
+		Team:     team,
 	}, nil
 }
