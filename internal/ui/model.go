@@ -354,7 +354,7 @@ func (m Model) View() string {
 		b.WriteString("\n\n")
 	}
 
-	b.WriteString(helpStyle.Render("w: week  q: quarter  y: year  tab/shift+tab: navigate  u: user  ctrl+c: quit"))
+	b.WriteString(helpStyle.Render("u: user  w: week  q: quarter  y: year  tab: date range  ctrl+c: quit"))
 
 	return b.String()
 }
