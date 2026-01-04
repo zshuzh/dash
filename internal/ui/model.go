@@ -52,6 +52,9 @@ var (
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#888888"))
 
+	fadedStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#444444"))
+
 	toggleActiveStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(lipgloss.Color("#FAFAFA")).
@@ -404,15 +407,11 @@ func (m Model) renderToggle() string {
 func (m Model) renderChart(periods []github.PeriodStats, title string, isMerged bool) string {
 	var b strings.Builder
 
-	if len(periods) == 0 {
-		b.WriteString(labelStyle.Render(title))
-		b.WriteString("\n\n")
-		b.WriteString(helpStyle.Render("No data for this period"))
-		b.WriteString("\n")
-		return chartStyle.Render(b.String())
-	}
+	allLabels, futureStart := m.getAllLabels()
+	numCols := len(allLabels)
+	numData := len(periods)
 
-	values := make([]int, len(periods))
+	values := make([]int, numCols)
 	total := 0
 	maxVal := 0
 
@@ -441,7 +440,10 @@ func (m Model) renderChart(periods []github.PeriodStats, title string, isMerged 
 		periodLabel = "month"
 	}
 
-	avg := float64(total) / float64(len(values))
+	avg := 0.0
+	if numData > 0 {
+		avg = float64(total) / float64(numData)
+	}
 
 	b.WriteString(labelStyle.Render(title))
 	b.WriteString(fmt.Sprintf("  Total: %d  |  Avg/%s: %.1f", total, periodLabel, avg))
@@ -453,8 +455,10 @@ func (m Model) renderChart(periods []github.PeriodStats, title string, isMerged 
 
 	spacing := strings.Repeat(" ", colWidth-barWidth)
 
-	for _, v := range values {
-		if v == maxVal && v > 0 {
+	for i, v := range values {
+		if i >= futureStart {
+			b.WriteString(strings.Repeat(" ", colWidth))
+		} else if v == maxVal && v > 0 {
 			label := fmt.Sprintf("%d", v)
 			padded := padBar(label, colWidth)
 			b.WriteString(helpStyle.Render(padded))
@@ -471,8 +475,12 @@ func (m Model) renderChart(periods []github.PeriodStats, title string, isMerged 
 
 	for row := maxHeight; row >= 1; row-- {
 		threshold := float64(row) / float64(maxHeight) * float64(maxVal)
-		for _, v := range values {
+		for i, v := range values {
+			isFuture := i >= futureStart
 			switch {
+			case isFuture:
+				b.WriteString(strings.Repeat(" ", colWidth))
+
 			case float64(v) >= threshold:
 				bar := strings.Repeat("█", barWidth)
 				b.WriteString(barStyle.Render(bar))
@@ -494,22 +502,76 @@ func (m Model) renderChart(periods []github.PeriodStats, title string, isMerged 
 		b.WriteString("\n")
 	}
 
-	for i, p := range periods {
-		var label string
-		switch m.viewMode {
-		case WeekView:
-			label = p.Start.Format("Mon")[:2]
-		case QuarterView:
-			label = fmt.Sprintf("W%d", i+1)
-		default:
-			label = p.Start.Format("Jan")[:3]
-		}
+	for i, label := range allLabels {
 		padded := padBar(label, colWidth)
-		b.WriteString(padded)
+		if i >= futureStart {
+			b.WriteString(fadedStyle.Render(padded))
+		} else {
+			b.WriteString(padded)
+		}
 	}
 	b.WriteString("\n")
 
 	return chartStyle.Render(b.String())
+}
+
+func (m Model) getAllLabels() (labels []string, futureStart int) {
+	now := time.Now()
+
+	switch m.viewMode {
+	case WeekView:
+		days := []string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+		todayIdx := int(now.Weekday())
+		if todayIdx == 0 {
+			todayIdx = 7
+		}
+		refWeek := timeutil.StartOfWeek(now).AddDate(0, 0, 7*m.periodOffset)
+		if m.periodOffset < 0 {
+			return days, 7
+		}
+		if m.periodOffset == 0 {
+			return days, todayIdx
+		}
+		futureWeekStart := timeutil.StartOfWeek(now).AddDate(0, 0, 7)
+		if !refWeek.Before(futureWeekStart) {
+			return days, 0
+		}
+		return days, 7
+
+	case QuarterView:
+		refQuarter := timeutil.StartOfQuarter(now).AddDate(0, 3*m.periodOffset, 0)
+		quarterEnd := refQuarter.AddDate(0, 3, 0)
+		firstMonday := timeutil.StartOfWeek(refQuarter)
+		numWeeks := 0
+		for ws := firstMonday; ws.Before(quarterEnd); ws = ws.AddDate(0, 0, 7) {
+			numWeeks++
+		}
+		for i := 1; i <= numWeeks; i++ {
+			labels = append(labels, fmt.Sprintf("W%d", i))
+		}
+		if m.periodOffset < 0 {
+			return labels, numWeeks
+		}
+		currentWeekStart := timeutil.StartOfWeek(now)
+		futureIdx := 0
+		for ws := firstMonday; ws.Before(quarterEnd); ws = ws.AddDate(0, 0, 7) {
+			if ws.After(currentWeekStart) {
+				break
+			}
+			futureIdx++
+		}
+		return labels, futureIdx
+
+	default:
+		months := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+		if m.periodOffset < 0 {
+			return months, 12
+		}
+		if m.periodOffset == 0 {
+			return months, int(now.Month())
+		}
+		return months, 0
+	}
 }
 
 func padBar(s string, barWidth int) string {
