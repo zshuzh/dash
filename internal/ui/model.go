@@ -144,12 +144,12 @@ type statsErrMsg struct {
 type FetchStatsFunc func(ctx context.Context, username string, viewMode ViewMode, offset int) (stats github.UserStats, err error)
 
 type Model struct {
-	ctx          context.Context
-	stats        github.UserStats
-	viewMode     ViewMode
-	periodOffset int
-	width        int
-	height       int
+	ctx           context.Context
+	stats         github.UserStats
+	viewMode      ViewMode
+	periodOffsets [3]int
+	width         int
+	height        int
 
 	members       []github.Member
 	selectingUser bool
@@ -159,16 +159,20 @@ type Model struct {
 	fetchStats    FetchStatsFunc
 }
 
+func (m Model) periodOffset() int {
+	return m.periodOffsets[m.viewMode]
+}
+
 func NewModel(ctx context.Context, stats github.UserStats, members []github.Member, fetchStats FetchStatsFunc) Model {
 	return Model{
-		ctx:          ctx,
-		stats:        stats,
-		viewMode:     WeekView,
-		periodOffset: 0,
-		width:        80,
-		height:       24,
-		members:      members,
-		fetchStats:   fetchStats,
+		ctx:           ctx,
+		stats:         stats,
+		viewMode:      WeekView,
+		periodOffsets: [3]int{0, 0, 0},
+		width:         80,
+		height:        24,
+		members:       members,
+		fetchStats:    fetchStats,
 	}
 }
 
@@ -205,7 +209,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keys.Weekly):
 			if m.viewMode != WeekView {
 				m.viewMode = WeekView
-				m.periodOffset = 0
 				m.loading = true
 				m.err = nil
 				return m, m.fetchCurrentStatsCmd()
@@ -213,7 +216,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keys.Quarter):
 			if m.viewMode != QuarterView {
 				m.viewMode = QuarterView
-				m.periodOffset = 0
 				m.loading = true
 				m.err = nil
 				return m, m.fetchCurrentStatsCmd()
@@ -221,7 +223,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keys.Yearly):
 			if m.viewMode != YearView {
 				m.viewMode = YearView
-				m.periodOffset = 0
 				m.loading = true
 				m.err = nil
 				return m, m.fetchCurrentStatsCmd()
@@ -232,14 +233,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.userCursor = 0
 			}
 		case key.Matches(msg, keys.Next):
-			if m.periodOffset < 0 {
-				m.periodOffset++
+			if m.periodOffset() < 0 {
+				m.periodOffsets[m.viewMode]++
 				m.loading = true
 				m.err = nil
 				return m, m.fetchCurrentStatsCmd()
 			}
 		case key.Matches(msg, keys.Prev):
-			m.periodOffset--
+			m.periodOffsets[m.viewMode]--
 			m.loading = true
 			m.err = nil
 			return m, m.fetchCurrentStatsCmd()
@@ -272,7 +273,7 @@ func (m Model) handleUserSelectKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selectingUser = false
 		m.loading = true
 		m.err = nil
-		m.periodOffset = 0
+		m.periodOffsets = [3]int{0, 0, 0}
 		return m, m.fetchStatsCmd(selectedUser, m.viewMode, 0)
 
 	case key.Matches(msg, keys.Quit):
@@ -300,7 +301,7 @@ func (m Model) fetchStatsCmd(username string, viewMode ViewMode, offset int) tea
 }
 
 func (m Model) fetchCurrentStatsCmd() tea.Cmd {
-	return m.fetchStatsCmd(m.stats.Username, m.viewMode, m.periodOffset)
+	return m.fetchStatsCmd(m.stats.Username, m.viewMode, m.periodOffset())
 }
 
 
@@ -350,14 +351,14 @@ func (m Model) periodLabel() string {
 	now := time.Now()
 	switch m.viewMode {
 	case WeekView:
-		monday := timeutil.StartOfWeek(now).AddDate(0, 0, 7*m.periodOffset)
+		monday := timeutil.StartOfWeek(now).AddDate(0, 0, 7*m.periodOffset())
 		return fmt.Sprintf("Week of %s", monday.Format("Jan 2"))
 	case QuarterView:
-		refQuarter := timeutil.StartOfQuarter(now).AddDate(0, 3*m.periodOffset, 0)
+		refQuarter := timeutil.StartOfQuarter(now).AddDate(0, 3*m.periodOffset(), 0)
 		q := (refQuarter.Month()-1)/3 + 1
 		return fmt.Sprintf("Q%d %d", q, refQuarter.Year())
 	default:
-		year := now.Year() + m.periodOffset
+		year := now.Year() + m.periodOffset()
 		return fmt.Sprintf("%d", year)
 	}
 }
@@ -416,6 +417,9 @@ func (m Model) renderChart(periods []github.PeriodStats, title string, isMerged 
 	maxVal := 0
 
 	for i, p := range periods {
+		if i >= numCols {
+			break
+		}
 		v := p.PRsReviewed
 		if isMerged {
 			v = p.PRsMerged
@@ -525,11 +529,11 @@ func (m Model) getAllLabels() (labels []string, futureStart int) {
 		if todayIdx == 0 {
 			todayIdx = 7
 		}
-		refWeek := timeutil.StartOfWeek(now).AddDate(0, 0, 7*m.periodOffset)
-		if m.periodOffset < 0 {
+		refWeek := timeutil.StartOfWeek(now).AddDate(0, 0, 7*m.periodOffset())
+		if m.periodOffset() < 0 {
 			return days, 7
 		}
-		if m.periodOffset == 0 {
+		if m.periodOffset() == 0 {
 			return days, todayIdx
 		}
 		futureWeekStart := timeutil.StartOfWeek(now).AddDate(0, 0, 7)
@@ -539,7 +543,7 @@ func (m Model) getAllLabels() (labels []string, futureStart int) {
 		return days, 7
 
 	case QuarterView:
-		refQuarter := timeutil.StartOfQuarter(now).AddDate(0, 3*m.periodOffset, 0)
+		refQuarter := timeutil.StartOfQuarter(now).AddDate(0, 3*m.periodOffset(), 0)
 		quarterEnd := refQuarter.AddDate(0, 3, 0)
 		firstMonday := timeutil.StartOfWeek(refQuarter)
 		numWeeks := 0
@@ -549,7 +553,7 @@ func (m Model) getAllLabels() (labels []string, futureStart int) {
 		for i := 1; i <= numWeeks; i++ {
 			labels = append(labels, fmt.Sprintf("W%d", i))
 		}
-		if m.periodOffset < 0 {
+		if m.periodOffset() < 0 {
 			return labels, numWeeks
 		}
 		currentWeekStart := timeutil.StartOfWeek(now)
@@ -564,10 +568,10 @@ func (m Model) getAllLabels() (labels []string, futureStart int) {
 
 	default:
 		months := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
-		if m.periodOffset < 0 {
+		if m.periodOffset() < 0 {
 			return months, 12
 		}
-		if m.periodOffset == 0 {
+		if m.periodOffset() == 0 {
 			return months, int(now.Month())
 		}
 		return months, 0
