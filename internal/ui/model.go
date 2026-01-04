@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -19,6 +20,17 @@ const (
 	WeekView ViewMode = iota
 	QuarterView
 	YearView
+)
+
+const (
+	chartMaxHeight = 8
+	chartBarWidth  = 3
+	chartColWidth  = 5
+)
+
+var (
+	partialBlocks = []string{" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"}
+	blankCol      = strings.Repeat(" ", chartColWidth)
 )
 
 var (
@@ -453,21 +465,44 @@ func (m Model) renderChart(periods []github.PeriodStats, title string, isMerged 
 	b.WriteString(fmt.Sprintf("  Total: %d  |  Avg/%s: %.1f", total, periodLabel, avg))
 	b.WriteString("\n\n")
 
-	maxHeight := 8
-	barWidth := 3
-	colWidth := 5
+	maxHeight := chartMaxHeight
+	barWidth := chartBarWidth
+	colWidth := chartColWidth
+	stepsPerRow := len(partialBlocks) - 1
+	totalLevels := maxHeight * stepsPerRow
 
 	spacing := strings.Repeat(" ", colWidth-barWidth)
 
+	levels := make([]int, numCols)
+	labelRows := make([]int, numCols)
 	for i, v := range values {
-		if i >= futureStart {
-			b.WriteString(strings.Repeat(" ", colWidth))
-		} else if v == maxVal && v > 0 {
+		if v <= 0 {
+			continue
+		}
+		lvl := int(math.Round(float64(v*totalLevels) / float64(maxVal)))
+		if lvl > totalLevels {
+			lvl = totalLevels
+		}
+		levels[i] = lvl
+
+		topRow := (lvl + stepsPerRow - 1) / stepsPerRow
+		if topRow >= maxHeight {
+			continue
+		}
+		labelRows[i] = topRow + 1
+	}
+
+	for i, v := range values {
+		if i >= futureStart || v <= 0 {
+			b.WriteString(blankCol)
+			continue
+		}
+		if levels[i] >= totalLevels || labelRows[i] == 0 {
 			label := fmt.Sprintf("%d", v)
 			padded := padBar(label, colWidth)
 			b.WriteString(helpStyle.Render(padded))
 		} else {
-			b.WriteString(strings.Repeat(" ", colWidth))
+			b.WriteString(blankCol)
 		}
 	}
 	b.WriteString("\n")
@@ -478,19 +513,33 @@ func (m Model) renderChart(periods []github.PeriodStats, title string, isMerged 
 	}
 
 	for row := maxHeight; row >= 1; row-- {
-		threshold := float64(row) / float64(maxHeight) * float64(maxVal)
-		for i, v := range values {
-			isFuture := i >= futureStart
-			switch {
-			case isFuture:
-				b.WriteString(strings.Repeat(" ", colWidth))
+		rowStart := (row - 1) * stepsPerRow
+		rowEnd := row * stepsPerRow
 
-			case float64(v) >= threshold:
+		for i, v := range values {
+			if i >= futureStart {
+				b.WriteString(blankCol)
+				continue
+			}
+
+			lvl := levels[i]
+
+			switch {
+			case lvl >= rowEnd:
 				bar := strings.Repeat("█", barWidth)
 				b.WriteString(barStyle.Render(bar))
 				b.WriteString(spacing)
 
-			case v > 0 && row == int(float64(v)/float64(maxVal)*float64(maxHeight))+1:
+			case lvl > rowStart:
+				idx := lvl - rowStart
+				if idx < 1 {
+					idx = 1
+				}
+				bar := strings.Repeat(partialBlocks[idx], barWidth)
+				b.WriteString(barStyle.Render(bar))
+				b.WriteString(spacing)
+
+			case v > 0 && row == labelRows[i]:
 				label := fmt.Sprintf("%d", v)
 				padded := padBar(label, colWidth)
 				b.WriteString(helpStyle.Render(padded))
@@ -500,7 +549,7 @@ func (m Model) renderChart(periods []github.PeriodStats, title string, isMerged 
 				b.WriteString(helpStyle.Render(padded))
 
 			default:
-				b.WriteString(strings.Repeat(" ", colWidth))
+				b.WriteString(blankCol)
 			}
 		}
 		b.WriteString("\n")
