@@ -6,13 +6,13 @@ import (
 	"time"
 
 	"github.com/rishabh-chatterjee/dashme/internal/timeutil"
-	"github.com/shurcooL/graphql"
+	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
 	"golang.org/x/sync/errgroup"
 )
 
 type Client struct {
-	gql *graphql.Client
+	gql *githubv4.Client
 }
 
 type PeriodStats struct {
@@ -37,7 +37,7 @@ func NewClient(token string) *Client {
 		&oauth2.Token{AccessToken: token},
 	)
 	httpClient := oauth2.NewClient(context.Background(), src)
-	client := graphql.NewClient("https://api.github.com/graphql", httpClient)
+	client := githubv4.NewClient(httpClient)
 	return &Client{gql: client}
 }
 
@@ -144,7 +144,7 @@ func (c *Client) countPRsMerged(ctx context.Context, org, username string, start
 		org, username, start.Format("2006-01-02"), endInclusive.Format("2006-01-02"))
 
 	variables := map[string]interface{}{
-		"query": graphql.String(q),
+		"query": githubv4.String(q),
 	}
 
 	err := c.gql.Query(ctx, &query, variables)
@@ -157,17 +157,17 @@ func (c *Client) countPRsMerged(ctx context.Context, org, username string, start
 
 func (c *Client) countPRsReviewed(ctx context.Context, org, username string, start, endExclusive time.Time) (int, error) {
 	var query struct {
-		Search struct {
-			IssueCount int
-		} `graphql:"search(query: $query, type: ISSUE, first: 1)"`
+		User struct {
+			ContributionsCollection struct {
+				TotalPullRequestReviewContributions int
+			} `graphql:"contributionsCollection(from: $from, to: $to)"`
+		} `graphql:"user(login: $username)"`
 	}
 
-	endInclusive := endExclusive.AddDate(0, 0, -1)
-	q := fmt.Sprintf("org:%s is:pr reviewed-by:%s merged:%s..%s",
-		org, username, start.Format("2006-01-02"), endInclusive.Format("2006-01-02"))
-
 	variables := map[string]interface{}{
-		"query": graphql.String(q),
+		"username": githubv4.String(username),
+		"from":     githubv4.DateTime{Time: start.UTC()},
+		"to":       githubv4.DateTime{Time: endExclusive.UTC()},
 	}
 
 	err := c.gql.Query(ctx, &query, variables)
@@ -175,7 +175,7 @@ func (c *Client) countPRsReviewed(ctx context.Context, org, username string, sta
 		return 0, err
 	}
 
-	return query.Search.IssueCount, nil
+	return query.User.ContributionsCollection.TotalPullRequestReviewContributions, nil
 }
 
 func (c *Client) FetchTeamMembers(ctx context.Context, org, team string) ([]Member, error) {
@@ -201,9 +201,9 @@ func (c *Client) FetchTeamMembers(ctx context.Context, org, team string) ([]Memb
 
 	for {
 		variables := map[string]interface{}{
-			"org":    graphql.String(org),
-			"team":   graphql.String(team),
-			"cursor": (*graphql.String)(cursor),
+			"org":    githubv4.String(org),
+			"team":   githubv4.String(team),
+			"cursor": (*githubv4.String)(cursor),
 		}
 
 		if err := c.gql.Query(ctx, &query, variables); err != nil {
