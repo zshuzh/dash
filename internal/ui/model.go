@@ -41,8 +41,7 @@ var (
 			Padding(0, 1)
 
 	chartStyle = lipgloss.NewStyle().
-			Padding(1, 0).
-			Margin(1, 0)
+			MarginTop(1)
 
 	labelStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#7D56F4")).
@@ -260,9 +259,8 @@ func (m Model) View() string {
 		reviewedChart := m.renderChart(m.stats.Periods, "PRs Reviewed", false)
 
 		b.WriteString(mergedChart)
-		b.WriteString("\n")
 		b.WriteString(reviewedChart)
-		b.WriteString("\n\n")
+		b.WriteString("\n")
 	}
 
 	b.WriteString(helpStyle.Render("w: week  q: quarter  y: year"))
