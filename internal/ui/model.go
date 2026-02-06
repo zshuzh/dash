@@ -54,13 +54,6 @@ var (
 	barReviewedStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#3498db"))
 
-	userStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#FAFAFA")).
-			Background(lipgloss.Color("#3498db")).
-			Padding(0, 1).
-			Margin(1, 0)
-
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#888888"))
 
@@ -77,27 +70,13 @@ var (
 			Foreground(lipgloss.Color("#888888")).
 			Padding(0, 1)
 
-	selectedItemStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#FAFAFA")).
-				Background(lipgloss.Color("#7D56F4")).
-				Padding(0, 1)
-
-	itemStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FAFAFA")).
-			Padding(0, 1)
-	)
+)
 
 type keyMap struct {
 	Quit       key.Binding
 	Weekly     key.Binding
 	Quarter    key.Binding
 	Yearly     key.Binding
-	UserSelect key.Binding
-	Up         key.Binding
-	Down       key.Binding
-	Enter      key.Binding
-	Escape     key.Binding
 	Next       key.Binding
 	Prev       key.Binding
 }
@@ -118,22 +97,6 @@ var keys = keyMap{
 	Yearly: key.NewBinding(
 		key.WithKeys("y", "Y"),
 		key.WithHelp("y", "year"),
-	),
-	UserSelect: key.NewBinding(
-		key.WithKeys("u", "U"),
-		key.WithHelp("u", "user"),
-	),
-	Up: key.NewBinding(
-		key.WithKeys("up", "k", "ctrl+p"),
-	),
-	Down: key.NewBinding(
-		key.WithKeys("down", "j", "ctrl+n"),
-	),
-	Enter: key.NewBinding(
-		key.WithKeys("enter"),
-	),
-	Escape: key.NewBinding(
-		key.WithKeys("esc"),
 	),
 	Next: key.NewBinding(
 		key.WithKeys("tab"),
@@ -163,9 +126,6 @@ type Model struct {
 	width         int
 	height        int
 
-	members       []github.Member
-	selectingUser bool
-	userCursor    int
 	loading       bool
 	err           error
 	fetchStats    FetchStatsFunc
@@ -175,7 +135,7 @@ func (m Model) periodOffset() int {
 	return m.periodOffsets[m.viewMode]
 }
 
-func NewModel(ctx context.Context, stats github.UserStats, members []github.Member, fetchStats FetchStatsFunc) Model {
+func NewModel(ctx context.Context, stats github.UserStats, fetchStats FetchStatsFunc) Model {
 	return Model{
 		ctx:           ctx,
 		stats:         stats,
@@ -183,7 +143,6 @@ func NewModel(ctx context.Context, stats github.UserStats, members []github.Memb
 		periodOffsets: [3]int{0, 0, 0},
 		width:         80,
 		height:        24,
-		members:       members,
 		fetchStats:    fetchStats,
 	}
 }
@@ -211,10 +170,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		if m.selectingUser {
-			return m.handleUserSelectKeys(msg)
-		}
-
 		switch {
 		case key.Matches(msg, keys.Quit):
 			return m, tea.Quit
@@ -239,11 +194,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.err = nil
 				return m, m.fetchCurrentStatsCmd()
 			}
-		case key.Matches(msg, keys.UserSelect):
-			if len(m.members) > 0 {
-				m.selectingUser = true
-				m.userCursor = 0
-			}
 		case key.Matches(msg, keys.Next):
 			if m.periodOffset() < 0 {
 				m.periodOffsets[m.viewMode]++
@@ -257,39 +207,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = nil
 			return m, m.fetchCurrentStatsCmd()
 		}
-	}
-
-	return m, nil
-}
-
-func (m Model) handleUserSelectKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, keys.Escape):
-		m.selectingUser = false
-		return m, nil
-
-	case key.Matches(msg, keys.Up):
-		if m.userCursor > 0 {
-			m.userCursor--
-		}
-		return m, nil
-
-	case key.Matches(msg, keys.Down):
-		if m.userCursor < len(m.members)-1 {
-			m.userCursor++
-		}
-		return m, nil
-
-	case key.Matches(msg, keys.Enter):
-		selectedUser := m.members[m.userCursor].Login
-		m.selectingUser = false
-		m.loading = true
-		m.err = nil
-		m.periodOffsets = [3]int{0, 0, 0}
-		return m, m.fetchStatsCmd(selectedUser, m.viewMode, 0)
-
-	case key.Matches(msg, keys.Quit):
-		return m, tea.Quit
 	}
 
 	return m, nil
@@ -319,16 +236,10 @@ func (m Model) fetchCurrentStatsCmd() tea.Cmd {
 
 
 func (m Model) View() string {
-	if m.selectingUser {
-		return m.renderUserSelect()
-	}
-
 	var b strings.Builder
 
 	header := lipgloss.JoinHorizontal(
 		lipgloss.Center,
-		userStyle.Render(fmt.Sprintf("@%s", m.stats.Username)),
-		"  ",
 		m.renderToggle(),
 		"  ",
 		titleStyle.Render(m.periodLabel()),
@@ -354,7 +265,7 @@ func (m Model) View() string {
 		b.WriteString("\n\n")
 	}
 
-	b.WriteString(helpStyle.Render("u: user  w: week  q: quarter  y: year  tab: date range  ctrl+c: quit"))
+	b.WriteString(helpStyle.Render("w: week  q: quarter  y: year  tab: date range  ctrl+c: quit"))
 
 	return b.String()
 }
@@ -373,31 +284,6 @@ func (m Model) periodLabel() string {
 		year := now.Year() + m.periodOffset()
 		return fmt.Sprintf("%d", year)
 	}
-}
-
-func (m Model) renderUserSelect() string {
-	var b strings.Builder
-
-	b.WriteString(titleStyle.Render("Select User"))
-	b.WriteString("\n\n")
-
-	for i, member := range m.members {
-		display := "@" + member.Login
-		if member.Name != "" {
-			display = fmt.Sprintf("@%s (%s)", member.Login, member.Name)
-		}
-		if i == m.userCursor {
-			b.WriteString(selectedItemStyle.Render("> " + display))
-		} else {
-			b.WriteString(itemStyle.Render("  " + display))
-		}
-		b.WriteString("\n")
-	}
-
-	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("↑/k ↓/j: navigate  enter: select  esc: cancel  ctrl+c: quit"))
-
-	return b.String()
 }
 
 func (m Model) renderToggle() string {

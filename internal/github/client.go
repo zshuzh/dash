@@ -27,11 +27,6 @@ type UserStats struct {
 	Periods  []PeriodStats
 }
 
-type Member struct {
-	Login string
-	Name  string
-}
-
 func NewClient(token string) *Client {
 	src := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: token},
@@ -178,47 +173,4 @@ func (c *Client) countPRsReviewed(ctx context.Context, org, username string, sta
 	return query.User.ContributionsCollection.TotalPullRequestReviewContributions, nil
 }
 
-func (c *Client) FetchTeamMembers(ctx context.Context, org, team string) ([]Member, error) {
-	var query struct {
-		Organization struct {
-			Team struct {
-				Members struct {
-					Nodes []struct {
-						Login string
-						Name  string
-					}
-					PageInfo struct {
-						HasNextPage bool
-						EndCursor   string
-					}
-				} `graphql:"members(first: 100, after: $cursor)"`
-			} `graphql:"team(slug: $team)"`
-		} `graphql:"organization(login: $org)"`
-	}
 
-	var members []Member
-	var cursor *string
-
-	for {
-		variables := map[string]interface{}{
-			"org":    githubv4.String(org),
-			"team":   githubv4.String(team),
-			"cursor": (*githubv4.String)(cursor),
-		}
-
-		if err := c.gql.Query(ctx, &query, variables); err != nil {
-			return nil, fmt.Errorf("failed to fetch team members: %w", err)
-		}
-
-		for _, node := range query.Organization.Team.Members.Nodes {
-			members = append(members, Member{Login: node.Login, Name: node.Name})
-		}
-
-		if !query.Organization.Team.Members.PageInfo.HasNextPage {
-			break
-		}
-		cursor = &query.Organization.Team.Members.PageInfo.EndCursor
-	}
-
-	return members, nil
-}

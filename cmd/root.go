@@ -31,11 +31,6 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("failed to fetch week stats: %w", err)
 		}
 
-		members, err := client.FetchTeamMembers(ctx, cfg.Org, cfg.Team)
-		if err != nil {
-			return fmt.Errorf("failed to fetch team members: %w", err)
-		}
-
 		fetchStats := func(ctx context.Context, username string, viewMode ui.ViewMode, offset int) (github.UserStats, error) {
 			switch viewMode {
 			case ui.QuarterView:
@@ -47,7 +42,7 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		p := tea.NewProgram(ui.NewModel(ctx, weekStats, members, fetchStats), tea.WithAltScreen())
+		p := tea.NewProgram(ui.NewModel(ctx, weekStats, fetchStats), tea.WithAltScreen())
 		if _, err := p.Run(); err != nil {
 			return fmt.Errorf("running UI: %w", err)
 		}
