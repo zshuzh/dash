@@ -76,6 +76,7 @@ type keyMap struct {
 	Weekly     key.Binding
 	Quarter    key.Binding
 	Yearly     key.Binding
+	Refresh    key.Binding
 	Next       key.Binding
 	Prev       key.Binding
 }
@@ -96,6 +97,10 @@ var keys = keyMap{
 	Yearly: key.NewBinding(
 		key.WithKeys("y", "Y"),
 		key.WithHelp("y", "year"),
+	),
+	Refresh: key.NewBinding(
+		key.WithKeys("r", "R"),
+		key.WithHelp("r", "refresh"),
 	),
 	Next: key.NewBinding(
 		key.WithKeys("tab"),
@@ -193,6 +198,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.err = nil
 				return m, m.fetchCurrentStatsCmd()
 			}
+		case key.Matches(msg, keys.Refresh):
+			m.loading = true
+			m.err = nil
+			return m, m.fetchCurrentStatsCmd()
 		case key.Matches(msg, keys.Next):
 			if m.periodOffset() < 0 {
 				m.periodOffsets[m.viewMode]++
