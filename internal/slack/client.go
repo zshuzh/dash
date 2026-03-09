@@ -24,60 +24,7 @@ func NewClient(token string) *Client {
 	}
 }
 
-func (c *Client) FetchWeekCounts(ctx context.Context, offset int) ([]int, error) {
-	now := time.Now()
-	refWeek := timeutil.StartOfWeek(now).AddDate(0, 0, 7*offset)
-	weekEnd := refWeek.AddDate(0, 0, 7)
-
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
-	if weekEnd.After(today) {
-		weekEnd = today
-	}
-
-	var periods []struct{ start, end time.Time }
-	for d := refWeek; d.Before(weekEnd); d = d.AddDate(0, 0, 1) {
-		periods = append(periods, struct{ start, end time.Time }{d, d.AddDate(0, 0, 1)})
-	}
-	return c.fetchCounts(ctx, periods)
-}
-
-func (c *Client) FetchQuarterCounts(ctx context.Context, offset int) ([]int, error) {
-	now := time.Now()
-	refQuarter := timeutil.StartOfQuarter(now).AddDate(0, 3*offset, 0)
-	quarterEnd := refQuarter.AddDate(0, 3, 0)
-	firstMonday := timeutil.StartOfWeek(refQuarter)
-
-	currentWeekStart := timeutil.StartOfWeek(now)
-	if quarterEnd.Before(currentWeekStart) || quarterEnd.Equal(currentWeekStart) {
-		currentWeekStart = timeutil.StartOfWeek(quarterEnd.AddDate(0, 0, -1))
-	}
-
-	var periods []struct{ start, end time.Time }
-	for weekStart := firstMonday; !weekStart.After(currentWeekStart) && weekStart.Before(quarterEnd); weekStart = weekStart.AddDate(0, 0, 7) {
-		periods = append(periods, struct{ start, end time.Time }{weekStart, weekStart.AddDate(0, 0, 7)})
-	}
-	return c.fetchCounts(ctx, periods)
-}
-
-func (c *Client) FetchYearCounts(ctx context.Context, offset int) ([]int, error) {
-	now := time.Now()
-	refYear := now.Year() + offset
-	yearStart := time.Date(refYear, 1, 1, 0, 0, 0, 0, now.Location())
-	yearEnd := time.Date(refYear+1, 1, 1, 0, 0, 0, 0, now.Location())
-
-	currentMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	if yearEnd.Before(currentMonth) || yearEnd.Equal(currentMonth) {
-		currentMonth = yearEnd.AddDate(0, -1, 0)
-	}
-
-	var periods []struct{ start, end time.Time }
-	for monthStart := yearStart; !monthStart.After(currentMonth) && monthStart.Before(yearEnd); monthStart = monthStart.AddDate(0, 1, 0) {
-		periods = append(periods, struct{ start, end time.Time }{monthStart, monthStart.AddDate(0, 1, 0)})
-	}
-	return c.fetchCounts(ctx, periods)
-}
-
-func (c *Client) fetchCounts(ctx context.Context, periods []struct{ start, end time.Time }) ([]int, error) {
+func (c *Client) FetchCounts(ctx context.Context, periods []timeutil.Period) ([]int, error) {
 	results := make([]int, len(periods))
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -86,7 +33,7 @@ func (c *Client) fetchCounts(ctx context.Context, periods []struct{ start, end t
 	for i, p := range periods {
 		i, p := i, p
 		g.Go(func() error {
-			count, err := c.countMessages(ctx, p.start, p.end)
+			count, err := c.countMessages(ctx, p.Start, p.End)
 			if err != nil {
 				return err
 			}

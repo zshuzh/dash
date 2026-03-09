@@ -8,8 +8,11 @@ import (
 	"github.com/rishabh-chatterjee/dashme/internal/config"
 	"github.com/rishabh-chatterjee/dashme/internal/github"
 	"github.com/rishabh-chatterjee/dashme/internal/slack"
+	"github.com/rishabh-chatterjee/dashme/internal/stats"
+	"github.com/rishabh-chatterjee/dashme/internal/timeutil"
 	"github.com/rishabh-chatterjee/dashme/internal/ui"
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 )
 
 var rootCmd = &cobra.Command{
@@ -25,40 +28,20 @@ var rootCmd = &cobra.Command{
 		}
 
 		ctx := cmd.Context()
-		client := github.NewClient(cfg.Token)
+		ghClient := github.NewClient(cfg.Token)
 
 		var slackClient *slack.Client
 		if cfg.SlackToken != "" {
 			slackClient = slack.NewClient(cfg.SlackToken)
 		}
 
-		weekStats, err := client.FetchWeekStats(ctx, cfg.Org, cfg.Username, 0)
+		weekStats, err := fetchAllStats(ctx, ghClient, slackClient, cfg.Org, cfg.Username, timeutil.WeekPeriods(0))
 		if err != nil {
 			return fmt.Errorf("failed to fetch week stats: %w", err)
 		}
 
-		if slackClient != nil {
-			mergeSlackCounts(ctx, slackClient, &weekStats, ui.WeekView, 0)
-		}
-
-		fetchStats := func(ctx context.Context, username string, viewMode ui.ViewMode, offset int) (github.UserStats, error) {
-			var stats github.UserStats
-			var err error
-			switch viewMode {
-			case ui.QuarterView:
-				stats, err = client.FetchQuarterStats(ctx, cfg.Org, username, offset)
-			case ui.YearView:
-				stats, err = client.FetchYearStats(ctx, cfg.Org, username, offset)
-			default:
-				stats, err = client.FetchWeekStats(ctx, cfg.Org, username, offset)
-			}
-			if err != nil {
-				return stats, err
-			}
-			if slackClient != nil {
-				mergeSlackCounts(ctx, slackClient, &stats, viewMode, offset)
-			}
-			return stats, nil
+		fetchStats := func(ctx context.Context, username string, viewMode ui.ViewMode, offset int) (stats.UserStats, error) {
+			return fetchAllStats(ctx, ghClient, slackClient, cfg.Org, username, periodsForView(viewMode, offset))
 		}
 
 		p := tea.NewProgram(ui.NewModel(ctx, weekStats, fetchStats), tea.WithAltScreen())
@@ -70,25 +53,51 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-func mergeSlackCounts(ctx context.Context, slackClient *slack.Client, stats *github.UserStats, viewMode ui.ViewMode, offset int) {
-	var counts []int
-	var err error
+func periodsForView(viewMode ui.ViewMode, offset int) []timeutil.Period {
 	switch viewMode {
 	case ui.QuarterView:
-		counts, err = slackClient.FetchQuarterCounts(ctx, offset)
+		return timeutil.QuarterPeriods(offset)
 	case ui.YearView:
-		counts, err = slackClient.FetchYearCounts(ctx, offset)
+		return timeutil.YearPeriods(offset)
 	default:
-		counts, err = slackClient.FetchWeekCounts(ctx, offset)
+		return timeutil.WeekPeriods(offset)
 	}
-	if err != nil {
-		return
+}
+
+func fetchAllStats(ctx context.Context, ghClient *github.Client, slackClient *slack.Client, org, username string, periods []timeutil.Period) (stats.UserStats, error) {
+	var userStats stats.UserStats
+	var slackCounts []int
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		var err error
+		userStats, err = ghClient.FetchStats(ctx, org, username, periods)
+		return err
+	})
+
+	if slackClient != nil {
+		g.Go(func() error {
+			var err error
+			slackCounts, err = slackClient.FetchCounts(ctx, periods)
+			if err != nil {
+				slackCounts = nil
+			}
+			return nil
+		})
 	}
-	for i := range stats.Periods {
-		if i < len(counts) {
-			stats.Periods[i].Announcements = counts[i]
+
+	if err := g.Wait(); err != nil {
+		return stats.UserStats{}, err
+	}
+
+	for i := range userStats.Periods {
+		if i < len(slackCounts) {
+			userStats.Periods[i].Announcements = slackCounts[i]
 		}
 	}
+
+	return userStats, nil
 }
 
 func Execute() error {

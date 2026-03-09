@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/rishabh-chatterjee/dashme/internal/github"
+	"github.com/rishabh-chatterjee/dashme/internal/stats"
 	"github.com/rishabh-chatterjee/dashme/internal/timeutil"
 )
 
@@ -116,18 +116,18 @@ var keys = keyMap{
 }
 
 type statsMsg struct {
-	stats github.UserStats
+	stats stats.UserStats
 }
 
 type statsErrMsg struct {
 	err error
 }
 
-type FetchStatsFunc func(ctx context.Context, username string, viewMode ViewMode, offset int) (stats github.UserStats, err error)
+type FetchStatsFunc func(ctx context.Context, username string, viewMode ViewMode, offset int) (stats stats.UserStats, err error)
 
 type Model struct {
 	ctx           context.Context
-	stats         github.UserStats
+	stats         stats.UserStats
 	viewMode      ViewMode
 	periodOffsets [3]int
 	width         int
@@ -142,7 +142,7 @@ func (m Model) periodOffset() int {
 	return m.periodOffsets[m.viewMode]
 }
 
-func NewModel(ctx context.Context, stats github.UserStats, fetchStats FetchStatsFunc) Model {
+func NewModel(ctx context.Context, stats stats.UserStats, fetchStats FetchStatsFunc) Model {
 	return Model{
 		ctx:           ctx,
 		stats:         stats,
@@ -267,14 +267,14 @@ func (m Model) View() string {
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render(fmt.Sprintf("Error: %v", m.err)))
 		b.WriteString("\n")
 	} else {
-		mergedChart := m.renderChart(m.stats.Periods, "PRs Merged", barMergedStyle, func(p github.PeriodStats) int { return p.PRsMerged })
-		reviewedChart := m.renderChart(m.stats.Periods, "PRs Reviewed", barReviewedStyle, func(p github.PeriodStats) int { return p.PRsReviewed })
+		mergedChart := m.renderChart(m.stats.Periods, "PRs Merged", barMergedStyle, func(p stats.PeriodStats) int { return p.PRsMerged })
+		reviewedChart := m.renderChart(m.stats.Periods, "PRs Reviewed", barReviewedStyle, func(p stats.PeriodStats) int { return p.PRsReviewed })
 
 		b.WriteString(mergedChart)
 		b.WriteString(reviewedChart)
 
 		if m.hasAnnouncements() {
-			announcementChart := m.renderChart(m.stats.Periods, "Announcements", barAnnouncementStyle, func(p github.PeriodStats) int { return p.Announcements })
+			announcementChart := m.renderChart(m.stats.Periods, "Announcements", barAnnouncementStyle, func(p stats.PeriodStats) int { return p.Announcements })
 			b.WriteString(announcementChart)
 		}
 		b.WriteString("\n")
@@ -325,7 +325,7 @@ func (m Model) hasAnnouncements() bool {
 	return false
 }
 
-func (m Model) renderChart(periods []github.PeriodStats, title string, barStyle lipgloss.Style, getValue func(github.PeriodStats) int) string {
+func (m Model) renderChart(periods []stats.PeriodStats, title string, barStyle lipgloss.Style, getValue func(stats.PeriodStats) int) string {
 	var b strings.Builder
 
 	allLabels, futureStart := m.getAllLabels()
