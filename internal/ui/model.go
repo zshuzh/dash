@@ -53,6 +53,9 @@ var (
 	barReviewedStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#3498db"))
 
+	barAnnouncementStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#E91E8C"))
+
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#888888"))
 
@@ -264,11 +267,16 @@ func (m Model) View() string {
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render(fmt.Sprintf("Error: %v", m.err)))
 		b.WriteString("\n")
 	} else {
-		mergedChart := m.renderChart(m.stats.Periods, "PRs Merged", true)
-		reviewedChart := m.renderChart(m.stats.Periods, "PRs Reviewed", false)
+		mergedChart := m.renderChart(m.stats.Periods, "PRs Merged", barMergedStyle, func(p github.PeriodStats) int { return p.PRsMerged })
+		reviewedChart := m.renderChart(m.stats.Periods, "PRs Reviewed", barReviewedStyle, func(p github.PeriodStats) int { return p.PRsReviewed })
 
 		b.WriteString(mergedChart)
 		b.WriteString(reviewedChart)
+
+		if m.hasAnnouncements() {
+			announcementChart := m.renderChart(m.stats.Periods, "Announcements", barAnnouncementStyle, func(p github.PeriodStats) int { return p.Announcements })
+			b.WriteString(announcementChart)
+		}
 		b.WriteString("\n")
 	}
 
@@ -308,7 +316,16 @@ func (m Model) renderToggle() string {
 	return week + " " + quarter + " " + year
 }
 
-func (m Model) renderChart(periods []github.PeriodStats, title string, isMerged bool) string {
+func (m Model) hasAnnouncements() bool {
+	for _, p := range m.stats.Periods {
+		if p.Announcements > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (m Model) renderChart(periods []github.PeriodStats, title string, barStyle lipgloss.Style, getValue func(github.PeriodStats) int) string {
 	var b strings.Builder
 
 	allLabels, futureStart := m.getAllLabels()
@@ -323,10 +340,7 @@ func (m Model) renderChart(periods []github.PeriodStats, title string, isMerged 
 		if i >= numCols {
 			break
 		}
-		v := p.PRsReviewed
-		if isMerged {
-			v = p.PRsMerged
-		}
+		v := getValue(p)
 		values[i] = v
 		total += v
 		if v > maxVal {
@@ -397,11 +411,6 @@ func (m Model) renderChart(periods []github.PeriodStats, title string, isMerged 
 		}
 	}
 	b.WriteString("\n")
-
-	barStyle := barReviewedStyle
-	if isMerged {
-		barStyle = barMergedStyle
-	}
 
 	for row := maxHeight; row >= 1; row-- {
 		rowStart := (row - 1) * stepsPerRow

@@ -16,10 +16,11 @@ type Client struct {
 }
 
 type PeriodStats struct {
-	Start       time.Time
-	End         time.Time
-	PRsMerged   int
-	PRsReviewed int
+	Start         time.Time
+	End           time.Time
+	PRsMerged     int
+	PRsReviewed   int
+	Announcements int
 }
 
 type UserStats struct {

@@ -8,10 +8,10 @@ import (
 )
 
 type Config struct {
-	Token    string
-	Username string
-	Org      string
-
+	Token      string
+	Username   string
+	Org        string
+	SlackToken string
 }
 
 func Load() (*Config, error) {
@@ -32,9 +32,12 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("GITHUB_ORG is required - set it in .env or as an environment variable")
 	}
 
+	slackToken := os.Getenv("SLACK_TOKEN")
+
 	return &Config{
-		Token:    token,
-		Username: username,
-		Org:      org,
+		Token:      token,
+		Username:   username,
+		Org:        org,
+		SlackToken: slackToken,
 	}, nil
 }
