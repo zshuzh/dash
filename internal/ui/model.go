@@ -275,7 +275,7 @@ func (m Model) View() string {
 		b.WriteString(m.renderChart(m.stats.Periods, "PRs Merged", barMergedStyle, allLabels, futureStart, func(p stats.PeriodStats) int { return p.PRsMerged }))
 		b.WriteString(m.renderChart(m.stats.Periods, "PRs Reviewed", barReviewedStyle, allLabels, futureStart, func(p stats.PeriodStats) int { return p.PRsReviewed }))
 
-		if m.hasAnnouncements() {
+		if m.stats.HasSlack {
 			b.WriteString(m.renderChart(m.stats.Periods, "Announcements", barAnnouncementStyle, allLabels, futureStart, func(p stats.PeriodStats) int { return p.Announcements }))
 		}
 		b.WriteString("\n")
@@ -315,15 +315,6 @@ func (m Model) renderToggle() string {
 	}
 
 	return week + " " + quarter + " " + year
-}
-
-func (m Model) hasAnnouncements() bool {
-	for _, p := range m.stats.Periods {
-		if p.Announcements > 0 {
-			return true
-		}
-	}
-	return false
 }
 
 func (m Model) renderChart(periods []stats.PeriodStats, title string, barStyle lipgloss.Style, allLabels []string, futureStart int, getValue func(stats.PeriodStats) int) string {

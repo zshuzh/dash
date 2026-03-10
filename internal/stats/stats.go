@@ -12,4 +12,5 @@ type PeriodStats struct {
 type UserStats struct {
 	Username string
 	Periods  []PeriodStats
+	HasSlack bool
 }

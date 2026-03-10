@@ -91,6 +91,7 @@ func fetchAllStats(ctx context.Context, ghClient *github.Client, slackClient *sl
 		return stats.UserStats{}, err
 	}
 
+	userStats.HasSlack = slackClient != nil
 	for i := range userStats.Periods {
 		if i < len(slackCounts) {
 			userStats.Periods[i].Announcements = slackCounts[i]
