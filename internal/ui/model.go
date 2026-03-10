@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/rishabh-chatterjee/dashme/internal/stats"
-	"github.com/rishabh-chatterjee/dashme/internal/timeutil"
+	"github.com/rishabh-chatterjee/dash/internal/stats"
+	"github.com/rishabh-chatterjee/dash/internal/timeutil"
 )
 
 type ViewMode int

@@ -1,6 +1,6 @@
 package stats
 
-import "github.com/rishabh-chatterjee/dashme/internal/timeutil"
+import "github.com/rishabh-chatterjee/dash/internal/timeutil"
 
 type PeriodStats struct {
 	Period        timeutil.Period

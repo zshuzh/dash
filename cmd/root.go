@@ -5,22 +5,22 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/rishabh-chatterjee/dashme/internal/config"
-	"github.com/rishabh-chatterjee/dashme/internal/github"
-	"github.com/rishabh-chatterjee/dashme/internal/slack"
-	"github.com/rishabh-chatterjee/dashme/internal/stats"
-	"github.com/rishabh-chatterjee/dashme/internal/timeutil"
-	"github.com/rishabh-chatterjee/dashme/internal/ui"
+	"github.com/rishabh-chatterjee/dash/internal/config"
+	"github.com/rishabh-chatterjee/dash/internal/github"
+	"github.com/rishabh-chatterjee/dash/internal/slack"
+	"github.com/rishabh-chatterjee/dash/internal/stats"
+	"github.com/rishabh-chatterjee/dash/internal/timeutil"
+	"github.com/rishabh-chatterjee/dash/internal/ui"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
 
 var rootCmd = &cobra.Command{
-	Use:                "dashme",
-	Short:              "A CLI dashboard for GitHub PR statistics",
-	Long:               `dashme shows weekly summaries of PRs merged and reviewed for you and your colleagues.`,
-	DisableAutoGenTag:  true,
-	CompletionOptions:  cobra.CompletionOptions{DisableDefaultCmd: true},
+	Use:               "dash",
+	Short:             "A CLI dashboard for GitHub PR statistics",
+	Long:              `dash shows weekly summaries of PRs merged and reviewed for you and your colleagues.`,
+	DisableAutoGenTag: true,
+	CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {

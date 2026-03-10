@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rishabh-chatterjee/dashme/cmd"
+	"github.com/rishabh-chatterjee/dash/cmd"
 )
 
 func main() {

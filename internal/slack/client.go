@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/rishabh-chatterjee/dashme/internal/timeutil"
+	"github.com/rishabh-chatterjee/dash/internal/timeutil"
 	"golang.org/x/sync/errgroup"
 )
 

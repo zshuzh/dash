@@ -1,4 +1,4 @@
-module github.com/rishabh-chatterjee/dashme
+module github.com/rishabh-chatterjee/dash
 
 go 1.25.5
 

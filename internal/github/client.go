@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rishabh-chatterjee/dashme/internal/stats"
-	"github.com/rishabh-chatterjee/dashme/internal/timeutil"
+	"github.com/rishabh-chatterjee/dash/internal/stats"
+	"github.com/rishabh-chatterjee/dash/internal/timeutil"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
 	"golang.org/x/sync/errgroup"
