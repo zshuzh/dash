@@ -39,17 +39,17 @@ func (c *Client) FetchStats(ctx context.Context, org, username string, periods [
 			if err != nil {
 				return fmt.Errorf("failed to count merged PRs: %w", err)
 			}
-
+			results[i].Period = p
+			results[i].PRsMerged = merged
+			return nil
+		})
+		g.Go(func() error {
 			reviewed, err := c.countPRsReviewed(ctx, org, username, p.Start, p.End)
 			if err != nil {
 				return fmt.Errorf("failed to count reviewed PRs: %w", err)
 			}
-
-			results[i] = stats.PeriodStats{
-				Period:      p,
-				PRsMerged:   merged,
-				PRsReviewed: reviewed,
-			}
+			results[i].Period = p
+			results[i].PRsReviewed = reviewed
 			return nil
 		})
 	}
@@ -71,7 +71,7 @@ func (c *Client) countPRsMerged(ctx context.Context, org, username string, start
 
 	endInclusive := endExclusive.AddDate(0, 0, -1)
 	q := fmt.Sprintf("org:%s is:pr is:merged author:%s merged:%s..%s",
-		org, username, start.Format("2006-01-02"), endInclusive.Format("2006-01-02"))
+		org, username, start.Format(time.DateOnly), endInclusive.Format(time.DateOnly))
 
 	variables := map[string]interface{}{
 		"query": githubv4.String(q),

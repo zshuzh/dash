@@ -59,6 +59,9 @@ var (
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#888888"))
 
+	errorStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FF0000"))
+
 	fadedStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#444444"))
 
@@ -264,18 +267,16 @@ func (m Model) View() string {
 		b.WriteString("\n")
 	} else if m.err != nil {
 		b.WriteString("\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render(fmt.Sprintf("Error: %v", m.err)))
+		b.WriteString(errorStyle.Render(fmt.Sprintf("Error: %v", m.err)))
 		b.WriteString("\n")
 	} else {
-		mergedChart := m.renderChart(m.stats.Periods, "PRs Merged", barMergedStyle, func(p stats.PeriodStats) int { return p.PRsMerged })
-		reviewedChart := m.renderChart(m.stats.Periods, "PRs Reviewed", barReviewedStyle, func(p stats.PeriodStats) int { return p.PRsReviewed })
+		allLabels, futureStart := m.getAllLabels()
 
-		b.WriteString(mergedChart)
-		b.WriteString(reviewedChart)
+		b.WriteString(m.renderChart(m.stats.Periods, "PRs Merged", barMergedStyle, allLabels, futureStart, func(p stats.PeriodStats) int { return p.PRsMerged }))
+		b.WriteString(m.renderChart(m.stats.Periods, "PRs Reviewed", barReviewedStyle, allLabels, futureStart, func(p stats.PeriodStats) int { return p.PRsReviewed }))
 
 		if m.hasAnnouncements() {
-			announcementChart := m.renderChart(m.stats.Periods, "Announcements", barAnnouncementStyle, func(p stats.PeriodStats) int { return p.Announcements })
-			b.WriteString(announcementChart)
+			b.WriteString(m.renderChart(m.stats.Periods, "Announcements", barAnnouncementStyle, allLabels, futureStart, func(p stats.PeriodStats) int { return p.Announcements }))
 		}
 		b.WriteString("\n")
 	}
@@ -325,10 +326,9 @@ func (m Model) hasAnnouncements() bool {
 	return false
 }
 
-func (m Model) renderChart(periods []stats.PeriodStats, title string, barStyle lipgloss.Style, getValue func(stats.PeriodStats) int) string {
+func (m Model) renderChart(periods []stats.PeriodStats, title string, barStyle lipgloss.Style, allLabels []string, futureStart int, getValue func(stats.PeriodStats) int) string {
 	var b strings.Builder
 
-	allLabels, futureStart := m.getAllLabels()
 	numCols := len(allLabels)
 	numData := len(periods)
 
@@ -370,13 +370,10 @@ func (m Model) renderChart(periods []stats.PeriodStats, title string, barStyle l
 	b.WriteString(fmt.Sprintf("  Total: %d  |  Avg/%s: %.1f", total, periodLabel, avg))
 	b.WriteString("\n\n")
 
-	maxHeight := chartMaxHeight
-	barWidth := chartBarWidth
-	colWidth := chartColWidth
 	stepsPerRow := len(partialBlocks) - 1
-	totalLevels := maxHeight * stepsPerRow
+	totalLevels := chartMaxHeight * stepsPerRow
 
-	spacing := strings.Repeat(" ", colWidth-barWidth)
+	spacing := strings.Repeat(" ", chartColWidth-chartBarWidth)
 
 	levels := make([]int, numCols)
 	labelRows := make([]int, numCols)
@@ -391,7 +388,7 @@ func (m Model) renderChart(periods []stats.PeriodStats, title string, barStyle l
 		levels[i] = lvl
 
 		topRow := (lvl + stepsPerRow - 1) / stepsPerRow
-		if topRow >= maxHeight {
+		if topRow >= chartMaxHeight {
 			continue
 		}
 		labelRows[i] = topRow + 1
@@ -404,7 +401,7 @@ func (m Model) renderChart(periods []stats.PeriodStats, title string, barStyle l
 		}
 		if levels[i] >= totalLevels || labelRows[i] == 0 {
 			label := fmt.Sprintf("%d", v)
-			padded := padBar(label, colWidth)
+			padded := padBar(label, chartColWidth)
 			b.WriteString(helpStyle.Render(padded))
 		} else {
 			b.WriteString(blankCol)
@@ -412,7 +409,7 @@ func (m Model) renderChart(periods []stats.PeriodStats, title string, barStyle l
 	}
 	b.WriteString("\n")
 
-	for row := maxHeight; row >= 1; row-- {
+	for row := chartMaxHeight; row >= 1; row-- {
 		rowStart := (row - 1) * stepsPerRow
 		rowEnd := row * stepsPerRow
 
@@ -426,7 +423,7 @@ func (m Model) renderChart(periods []stats.PeriodStats, title string, barStyle l
 
 			switch {
 			case lvl >= rowEnd:
-				bar := strings.Repeat("█", barWidth)
+				bar := strings.Repeat("█", chartBarWidth)
 				b.WriteString(barStyle.Render(bar))
 				b.WriteString(spacing)
 
@@ -435,17 +432,17 @@ func (m Model) renderChart(periods []stats.PeriodStats, title string, barStyle l
 				if idx < 1 {
 					idx = 1
 				}
-				bar := strings.Repeat(partialBlocks[idx], barWidth)
+				bar := strings.Repeat(partialBlocks[idx], chartBarWidth)
 				b.WriteString(barStyle.Render(bar))
 				b.WriteString(spacing)
 
 			case v > 0 && row == labelRows[i]:
 				label := fmt.Sprintf("%d", v)
-				padded := padBar(label, colWidth)
+				padded := padBar(label, chartColWidth)
 				b.WriteString(helpStyle.Render(padded))
 
 			case v == 0 && row == 1:
-				padded := padBar("0", colWidth)
+				padded := padBar("0", chartColWidth)
 				b.WriteString(helpStyle.Render(padded))
 
 			default:
@@ -456,7 +453,7 @@ func (m Model) renderChart(periods []stats.PeriodStats, title string, barStyle l
 	}
 
 	for i, label := range allLabels {
-		padded := padBar(label, colWidth)
+		padded := padBar(label, chartColWidth)
 		if i >= futureStart {
 			b.WriteString(fadedStyle.Render(padded))
 		} else {
@@ -474,10 +471,7 @@ func (m Model) getAllLabels() (labels []string, futureStart int) {
 	switch m.viewMode {
 	case WeekView:
 		days := []string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
-		todayIdx := int(now.Weekday())
-		if todayIdx == 0 {
-			todayIdx = 7
-		}
+		todayIdx := timeutil.ISOWeekday(now)
 		refWeek := timeutil.StartOfWeek(now).AddDate(0, 0, 7*m.periodOffset())
 		if m.periodOffset() < 0 {
 			return days, 7

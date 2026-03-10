@@ -6,11 +6,16 @@ type Period struct {
 	Start, End time.Time
 }
 
-func StartOfWeek(t time.Time) time.Time {
-	weekday := int(t.Weekday())
-	if weekday == 0 {
-		weekday = 7
+func ISOWeekday(t time.Time) int {
+	wd := int(t.Weekday())
+	if wd == 0 {
+		wd = 7
 	}
+	return wd
+}
+
+func StartOfWeek(t time.Time) time.Time {
+	weekday := ISOWeekday(t)
 	return time.Date(t.Year(), t.Month(), t.Day()-weekday+1, 0, 0, 0, 0, t.Location())
 }
 

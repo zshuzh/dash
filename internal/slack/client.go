@@ -56,10 +56,13 @@ type searchResponse struct {
 	} `json:"messages"`
 }
 
+const announcementEmoji = ":meow_megaphone:"
+
 func (c *Client) countMessages(ctx context.Context, start, end time.Time) (int, error) {
-	q := fmt.Sprintf("from:me :meow_megaphone: after:%s before:%s",
-		start.AddDate(0, 0, -1).Format("2006-01-02"),
-		end.Format("2006-01-02"),
+	q := fmt.Sprintf("from:me %s after:%s before:%s",
+		announcementEmoji,
+		start.AddDate(0, 0, -1).Format(time.DateOnly),
+		end.Format(time.DateOnly),
 	)
 
 	u := "https://slack.com/api/search.messages?" + url.Values{
